@@ -4,7 +4,7 @@ use csv::Reader;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::opts::OutputFormat;
+use crate::cli::OutputFormat;
 
 // Name,Position,DOB,Nationality,Kit Number
 #[derive(Debug, Deserialize, Serialize)]
