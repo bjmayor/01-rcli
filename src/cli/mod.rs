@@ -1,12 +1,14 @@
 mod base64;
 mod csv;
 mod genpass;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+mod text;
 
 pub use base64::*;
 use clap::Parser;
 pub use csv::*;
 pub use genpass::*;
+pub use text::*;
 
 #[derive(Debug, Parser)]
 #[command(name = "rcli", version, about, author, long_about=None)]
@@ -23,6 +25,8 @@ pub enum SubCommand {
     GenPass(GenPassOpts),
     #[command(subcommand)]
     Base64(Base64SubCommand),
+    #[command(subcommand)]
+    Text(TextSubCommand),
 }
 
 fn verify_file_exists(filename: &str) -> Result<String, String> {
@@ -30,6 +34,14 @@ fn verify_file_exists(filename: &str) -> Result<String, String> {
         Ok(filename.to_string())
     } else {
         Err(format!("File not found: {}", filename))
+    }
+}
+fn verify_path(path: &str) -> Result<PathBuf, String> {
+    let p = Path::new(path);
+    if p.exists() && p.is_dir() {
+        Ok(path.into())
+    } else {
+        Err(format!("Path not found: {} or not a directory", path))
     }
 }
 
