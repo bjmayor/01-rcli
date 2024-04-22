@@ -8,6 +8,7 @@ use axum::{
     Router,
 };
 
+use tower_http::services::ServeDir;
 use tracing::info;
 
 #[derive(Debug)]
@@ -17,8 +18,10 @@ struct HtpServeState {
 pub async fn process_http_serve(path: PathBuf, port: u16) -> Result<()> {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     info!("Serving {:?} on {}", path, addr);
-    let state = HtpServeState { path };
+    let state = HtpServeState { path: path.clone() };
+    let dir_service = ServeDir::new(path);
     let router = Router::new()
+        .nest_service("/tower", dir_service)
         .route("/*path", get(file_handler))
         .with_state(Arc::new(state));
 
@@ -43,5 +46,21 @@ async fn file_handler(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Error reading file: {:?}", e),
         ),
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use std::path::PathBuf;
+
+    #[tokio::test]
+    async fn test_file_handler() {
+        let state = Arc::new(HtpServeState {
+            path: PathBuf::from("."),
+        });
+        let (status, content) = file_handler(State(state), Path("Cargo.toml".to_string())).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(content.starts_with("[package]"));
     }
 }

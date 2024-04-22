@@ -1,3 +1,9 @@
 ### test index page
 
-GET http://localhost:8080/abc.txt
+GET http://localhost:8080/Cargo.toml
+
+
+### test tower page
+
+GET http://localhost:8080/tower/Cargo.toml
+Range: bytes=0-10
