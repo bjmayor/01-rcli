@@ -2,12 +2,14 @@ mod base64;
 mod csv;
 mod genpass;
 use std::path::{Path, PathBuf};
+mod http;
 mod text;
 
 pub use base64::*;
 use clap::Parser;
 pub use csv::*;
 pub use genpass::*;
+pub use http::*;
 pub use text::*;
 
 #[derive(Debug, Parser)]
@@ -27,6 +29,8 @@ pub enum SubCommand {
     Base64(Base64SubCommand),
     #[command(subcommand)]
     Text(TextSubCommand),
+    #[command(subcommand)]
+    Http(HttpSubCommand),
 }
 
 fn verify_file_exists(filename: &str) -> Result<String, String> {
