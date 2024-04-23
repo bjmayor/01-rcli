@@ -6,6 +6,8 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 
+use chacha20poly1305::aead::{generic_array::GenericArray, Aead, AeadCore, KeyInit};
+
 pub trait TextSign {
     /// Sign the data from the reader and return the signature
     fn sign(&self, reader: &mut dyn Read) -> Result<Vec<u8>>;
@@ -13,6 +15,14 @@ pub trait TextSign {
 
 pub trait TextVerify {
     fn verify(&self, reader: impl Read, signature: &[u8]) -> Result<bool>;
+}
+
+pub trait TextEncryptor {
+    fn encrypt(&self, reader: &mut dyn Read) -> Result<Vec<u8>>;
+}
+
+pub trait TextDecryptor {
+    fn decrypt(&self, reader: &mut dyn Read) -> Result<Vec<u8>>;
 }
 
 pub trait KeyLoader {
@@ -34,6 +44,10 @@ pub struct Ed25519Signer {
 
 pub struct Ed25519Verifier {
     key: VerifyingKey,
+}
+
+pub struct ChaCha20Poly1305 {
+    key: [u8; 32],
 }
 
 pub fn process_text_sign(input: &str, key: &str, format: TextSignFormat) -> anyhow::Result<String> {
@@ -77,6 +91,78 @@ pub fn process_generate_key(format: TextSignFormat) -> Result<Vec<Vec<u8>>> {
     match format {
         TextSignFormat::Blake3 => Blake3::generate(),
         TextSignFormat::Ed25519 => Ed25519Signer::generate(),
+    }
+}
+
+pub fn process_text_encrypt(input: &str, key: &str) -> anyhow::Result<String> {
+    let mut reader = get_reader(input)?;
+    let encryptor = ChaCha20Poly1305::load(key)?;
+    let encrypted = encryptor.encrypt(&mut reader)?;
+    let encrypted = URL_SAFE_NO_PAD.encode(encrypted);
+    Ok(encrypted)
+}
+
+pub fn process_text_decrypt(input: &str, key: &str) -> anyhow::Result<String> {
+    let mut reader = get_reader(input)?;
+    let mut buf = Vec::new();
+    reader.read_to_end(&mut buf)?;
+    let encrypted = URL_SAFE_NO_PAD.decode(buf)?;
+    let decryptor = ChaCha20Poly1305::load(key)?;
+    let decrypted = decryptor.decrypt(&mut &encrypted[..])?;
+    let decrypted = String::from_utf8(decrypted)?;
+    Ok(decrypted)
+}
+
+impl ChaCha20Poly1305 {
+    pub fn new(key: [u8; 32]) -> Self {
+        Self { key }
+    }
+
+    pub fn try_new(key: &[u8]) -> Result<Self> {
+        let key = &key[0..32];
+        let key = key.try_into().unwrap();
+        let signer = ChaCha20Poly1305::new(key);
+        Ok(signer)
+    }
+}
+
+impl KeyLoader for ChaCha20Poly1305 {
+    fn load(path: impl AsRef<Path>) -> Result<Self> {
+        let key = fs::read(path)?;
+        Self::try_new(&key)
+    }
+}
+
+impl TextEncryptor for ChaCha20Poly1305 {
+    fn encrypt(&self, reader: &mut dyn Read) -> Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        let cipher = chacha20poly1305::ChaCha20Poly1305::new(&self.key.into());
+        let nonce = chacha20poly1305::ChaCha20Poly1305::generate_nonce(&mut OsRng);
+        let encrypted = cipher
+            .encrypt(&nonce, buf.as_ref())
+            .map_err(|e| anyhow::anyhow!("Error encrypting data: {}", e))?;
+        let mut buf = Vec::new();
+        buf.extend_from_slice(&nonce);
+        buf.extend_from_slice(&encrypted);
+        Ok(buf)
+    }
+}
+
+impl TextDecryptor for ChaCha20Poly1305 {
+    fn decrypt(&self, reader: &mut dyn Read) -> Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf)?;
+        let cipher = chacha20poly1305::ChaCha20Poly1305::new(&self.key.into());
+        if buf.len() < 12 {
+            return Err(anyhow::anyhow!("Invalid data"));
+        }
+        let nonce = &buf[0..12];
+        let encrypted = &buf[12..];
+        let decrypted = cipher
+            .decrypt(GenericArray::from_slice(nonce), encrypted)
+            .map_err(|e| anyhow::anyhow!("Error decrypting data: {}", e))?;
+        Ok(decrypted)
     }
 }
 impl TextSign for Blake3 {
@@ -211,6 +297,16 @@ mod tests {
         let sig = signer.sign(&mut &data[..])?;
         assert!(verifier.verify(&mut &data[..], &sig)?);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_chacha20poly1305_encrypt_decrypt() -> Result<()> {
+        let key = ChaCha20Poly1305::load("fixtures/chacha20poly1305.txt")?;
+        let data = b"Hello, World!";
+        let encrypted = key.encrypt(&mut &data[..])?;
+        let decrypted = key.decrypt(&mut &encrypted[..])?;
+        assert_eq!(data, decrypted.as_slice());
         Ok(())
     }
 }

@@ -4,7 +4,10 @@ use anyhow::Ok;
 use clap::Parser;
 use enum_dispatch::enum_dispatch;
 
-use crate::{process_generate_key, process_text_sign, process_text_verify, CmdExector};
+use crate::{
+    process_generate_key, process_text_decrypt, process_text_encrypt, process_text_sign,
+    process_text_verify, CmdExector,
+};
 
 use super::{verify_file_exists, verify_path};
 
@@ -17,6 +20,10 @@ pub enum TextSubCommand {
     Verify(TextVerifyOpts),
     #[command(about = "Generate a new key")]
     Generate(TextKeyGenOpts),
+    #[command(about = "Encrypt text")]
+    Encrypt(TextEncryptOpts),
+    #[command(about = "Decrypt text")]
+    Decrypt(TextDecryptOpts),
 }
 
 #[derive(Debug, Parser)]
@@ -86,6 +93,22 @@ pub struct TextKeyGenOpts {
     pub output: PathBuf,
 }
 
+#[derive(Debug, Parser)]
+pub struct TextEncryptOpts {
+    #[arg(short, long,value_parser=verify_file_exists,default_value="-")]
+    pub input: String,
+    #[arg(short, long,value_parser=verify_file_exists)]
+    pub key: String,
+}
+
+#[derive(Debug, Parser)]
+pub struct TextDecryptOpts {
+    #[arg(short, long,value_parser=verify_file_exists,default_value="-" )]
+    pub input: String,
+    #[arg(short, long,value_parser=verify_file_exists)]
+    pub key: String,
+}
+
 impl CmdExector for TextSignOpts {
     async fn execute(&self) -> anyhow::Result<()> {
         let sig = process_text_sign(&self.input, &self.key, self.format)?;
@@ -118,6 +141,22 @@ impl CmdExector for TextKeyGenOpts {
                 fs::write(output, &keys[1])?;
             }
         }
+        Ok(())
+    }
+}
+
+impl CmdExector for TextEncryptOpts {
+    async fn execute(&self) -> anyhow::Result<()> {
+        let encrypted = process_text_encrypt(&self.input, &self.key)?;
+        println!("{}", encrypted);
+        Ok(())
+    }
+}
+
+impl CmdExector for TextDecryptOpts {
+    async fn execute(&self) -> anyhow::Result<()> {
+        let decrypted = process_text_decrypt(&self.input, &self.key)?;
+        println!("{}", decrypted);
         Ok(())
     }
 }
