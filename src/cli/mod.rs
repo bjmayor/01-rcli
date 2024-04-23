@@ -3,6 +3,7 @@ mod csv;
 mod genpass;
 use std::path::{Path, PathBuf};
 mod http;
+mod jwt;
 mod text;
 
 pub use base64::*;
@@ -11,6 +12,7 @@ pub use csv::*;
 use enum_dispatch::enum_dispatch;
 pub use genpass::*;
 pub use http::*;
+pub use jwt::*;
 pub use text::*;
 
 #[derive(Debug, Parser)]
@@ -33,6 +35,8 @@ pub enum SubCommand {
     Text(TextSubCommand),
     #[command(subcommand)]
     Http(HttpSubCommand),
+    #[command(subcommand)]
+    Jwt(JwtSubCommand),
 }
 
 fn verify_file_exists(filename: &str) -> Result<String, String> {
