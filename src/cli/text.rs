@@ -1,6 +1,9 @@
-use std::{fmt::Display, path::PathBuf, str::FromStr};
+use std::{fmt::Display, fs, path::PathBuf, str::FromStr};
 
+use anyhow::Ok;
 use clap::Parser;
+
+use crate::{process_generate_key, process_text_sign, process_text_verify, CmdExector};
 
 use super::{verify_file_exists, verify_path};
 
@@ -79,4 +82,50 @@ pub struct TextKeyGenOpts {
     pub format: TextSignFormat,
     #[arg(short, long, value_parser=verify_path)]
     pub output: PathBuf,
+}
+
+impl CmdExector for TextSubCommand {
+    async fn execute(&self) -> anyhow::Result<()> {
+        match self {
+            TextSubCommand::Sign(opts) => opts.execute().await,
+            TextSubCommand::Verify(opts) => opts.execute().await,
+            TextSubCommand::Generate(opts) => opts.execute().await,
+        }
+    }
+}
+
+impl CmdExector for TextSignOpts {
+    async fn execute(&self) -> anyhow::Result<()> {
+        let sig = process_text_sign(&self.input, &self.key, self.format)?;
+        println!("{}", sig);
+        Ok(())
+    }
+}
+
+impl CmdExector for TextVerifyOpts {
+    async fn execute(&self) -> anyhow::Result<()> {
+        let verified = process_text_verify(&self.input, &self.key, self.format, &self.sig)?;
+        println!("{}", verified);
+        Ok(())
+    }
+}
+
+impl CmdExector for TextKeyGenOpts {
+    async fn execute(&self) -> anyhow::Result<()> {
+        let keys = process_generate_key(self.format)?;
+        match self.format {
+            TextSignFormat::Blake3 => {
+                let output = self.output.join("blake3.txt");
+                fs::write(output, &keys[0])?;
+            }
+            TextSignFormat::Ed25519 => {
+                let dir = self.output.clone();
+                let output = dir.join("ed25519.sk");
+                fs::write(output, &keys[0])?;
+                let output = dir.join("ed25519.pk");
+                fs::write(output, &keys[1])?;
+            }
+        }
+        Ok(())
+    }
 }
