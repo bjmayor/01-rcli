@@ -8,11 +8,10 @@ mod text;
 pub use base64::*;
 use clap::Parser;
 pub use csv::*;
+use enum_dispatch::enum_dispatch;
 pub use genpass::*;
 pub use http::*;
 pub use text::*;
-
-use crate::CmdExector;
 
 #[derive(Debug, Parser)]
 #[command(name = "rcli", version, about, author, long_about=None)]
@@ -22,6 +21,7 @@ pub struct Opts {
 }
 
 #[derive(Debug, Parser)]
+#[enum_dispatch(CmdExector)]
 pub enum SubCommand {
     #[command(name = "csv", about = "Show CSV or Convert CSV to other formats")]
     Csv(CsvOpts),
@@ -48,18 +48,6 @@ fn verify_path(path: &str) -> Result<PathBuf, String> {
         Ok(path.into())
     } else {
         Err(format!("Path not found: {} or not a directory", path))
-    }
-}
-
-impl CmdExector for SubCommand {
-    async fn execute(&self) -> anyhow::Result<()> {
-        match self {
-            SubCommand::Csv(opts) => opts.execute().await,
-            SubCommand::GenPass(opts) => opts.execute().await,
-            SubCommand::Base64(opts) => opts.execute().await,
-            SubCommand::Text(opts) => opts.execute().await,
-            SubCommand::Http(opts) => opts.execute().await,
-        }
     }
 }
 

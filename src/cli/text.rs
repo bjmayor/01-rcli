@@ -2,12 +2,14 @@ use std::{fmt::Display, fs, path::PathBuf, str::FromStr};
 
 use anyhow::Ok;
 use clap::Parser;
+use enum_dispatch::enum_dispatch;
 
 use crate::{process_generate_key, process_text_sign, process_text_verify, CmdExector};
 
 use super::{verify_file_exists, verify_path};
 
 #[derive(Debug, Parser)]
+#[enum_dispatch(CmdExector)]
 pub enum TextSubCommand {
     #[command(about = "Sign text with a private/shared key and output a signature")]
     Sign(TextSignOpts),
@@ -82,16 +84,6 @@ pub struct TextKeyGenOpts {
     pub format: TextSignFormat,
     #[arg(short, long, value_parser=verify_path)]
     pub output: PathBuf,
-}
-
-impl CmdExector for TextSubCommand {
-    async fn execute(&self) -> anyhow::Result<()> {
-        match self {
-            TextSubCommand::Sign(opts) => opts.execute().await,
-            TextSubCommand::Verify(opts) => opts.execute().await,
-            TextSubCommand::Generate(opts) => opts.execute().await,
-        }
-    }
 }
 
 impl CmdExector for TextSignOpts {
